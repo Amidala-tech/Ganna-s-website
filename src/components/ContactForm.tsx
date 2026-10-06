@@ -1,226 +1,104 @@
 "use client";
 
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Send, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { useEffect, useRef } from "react";
+import Script from "next/script";
 import { CONTACT } from "@/lib/data";
-
-const INQUIRY_TYPES = [
-  "Business Consultation",
-  "Accounting & Bookkeeping",
-  "Taxation Support",
-  "Compliance & Registration",
-  "HR / Payroll Services",
-  "Co-Working / Office Services",
-  "Careers",
-  "General Inquiry",
-];
-
-const inputClass =
-  "h-[52px] w-full rounded-xl border border-line bg-bg px-4 text-[15px] text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-gold";
-
-type Status = "idle" | "submitting" | "success" | "error";
 
 const FORMSUBMIT_ENDPOINT = `https://formsubmit.co/ajax/${CONTACT.inquiryEmail}`;
 
+type Inquiry = { name: string; email: string; phone: string; message: string };
+
+function emailInquiry({ name, email, phone, message }: Inquiry) {
+  fetch(FORMSUBMIT_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      email,
+      phone,
+      message,
+      _subject: `[Website Inquiry] ${name}`,
+      _template: "table",
+      _captcha: "false",
+    }),
+    keepalive: true,
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    })
+    .catch(() => {
+      console.warn("Inquiry reached AuditSetu, but the email copy failed.");
+    });
+}
+
+// Inquiries go to AuditSetu through its widget, and are also emailed via
+// FormSubmit. The widget renders into an open shadow root on
+// #auditsetu-inquiry-form and swaps its form for a role="status" message once
+// AuditSetu accepts the inquiry, so the fields are captured on submit and only
+// emailed after that confirmation — failed or retried sends don't duplicate.
 export default function ContactForm() {
-  const [status, setStatus] = useState<Status>("idle");
+  const hostRef = useRef<HTMLDivElement>(null);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
 
-    // Honeypot — bots fill hidden fields, humans don't.
-    if (fd.get("_honey")) return;
+    let root: ShadowRoot | null = null;
+    let pending: Inquiry | null = null;
 
-    const name = String(fd.get("name") ?? "");
-    const email = String(fd.get("email") ?? "");
-    const phone = String(fd.get("phone") ?? "");
-    const inquiry = String(fd.get("inquiry") ?? "");
-    const message = String(fd.get("message") ?? "");
+    const onSubmit = (e: Event) => {
+      const fd = new FormData(e.target as HTMLFormElement);
+      const field = (key: string) => String(fd.get(key) ?? "").trim();
+      // Honeypot — bots fill hidden fields, humans don't.
+      pending = field("website")
+        ? null
+        : {
+            name: field("name"),
+            email: field("email"),
+            phone: field("phone"),
+            message: field("message"),
+          };
+    };
 
-    setStatus("submitting");
-    try {
-      const res = await fetch(FORMSUBMIT_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          phone,
-          inquiry_type: inquiry,
-          message,
-          _subject: `[Website Inquiry] ${inquiry} — ${name}`,
-          _template: "table",
-          _captcha: "false",
-        }),
-      });
-      const json = await res.json();
-      // FormSubmit returns { success: "true" | true, message }
-      const ok = json?.success === true || json?.success === "true";
-      setStatus(ok ? "success" : "error");
-    } catch {
-      setStatus("error");
-    }
-  }
+    const observer = new MutationObserver(() => {
+      if (pending && root?.querySelector('[role="status"]')) {
+        emailInquiry(pending);
+        pending = null;
+      }
+    });
+
+    // attachShadow can't be observed, so check each frame until the widget
+    // mounts. It attaches the shadow root before fetching its config and
+    // rendering the form, so the listener is always in place before a submit.
+    let frame = 0;
+    const waitForMount = () => {
+      if (!host.shadowRoot) {
+        frame = requestAnimationFrame(waitForMount);
+        return;
+      }
+      root = host.shadowRoot;
+      root.addEventListener("submit", onSubmit, true);
+      observer.observe(root, { childList: true, subtree: true });
+    };
+    waitForMount();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      root?.removeEventListener("submit", onSubmit, true);
+      observer.disconnect();
+    };
+  }, []);
 
   return (
-    <div
-      id="consultation-form"
-      className="rounded-3xl border border-line bg-surface p-7 shadow-sm sm:p-9"
-    >
-      <AnimatePresence mode="wait">
-        {status === "success" ? (
-          <motion.div
-            key="success"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex min-h-[420px] flex-col items-center justify-center text-center"
-          >
-            <CheckCircle2 size={56} strokeWidth={1.5} className="text-gold" />
-            <h3 className="mt-5 font-display text-3xl font-semibold text-ink">
-              Thank You for Reaching Out
-            </h3>
-            <p className="mt-3 max-w-sm text-muted">
-              Our team will review your inquiry and respond through the
-              appropriate channel.
-            </p>
-          </motion.div>
-        ) : (
-          <motion.form
-            key="form"
-            onSubmit={handleSubmit}
-            initial={false}
-            exit={{ opacity: 0, y: -16 }}
-          >
-            <h3 className="font-display text-3xl font-semibold text-ink">
-              Send Us a Message
-            </h3>
-            <p className="mt-2 text-sm text-muted">
-              Please share a brief overview of your requirement so our team can
-              direct your inquiry appropriately.
-            </p>
-
-            {/* Honeypot field (hidden from real users) */}
-            <input
-              type="text"
-              name="_honey"
-              tabIndex={-1}
-              autoComplete="off"
-              className="hidden"
-              aria-hidden="true"
-            />
-
-            <div className="mt-7 grid gap-5 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="name"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Full Name *
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  required
-                  placeholder="Your full name"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="email"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Email Address *
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  placeholder="you@company.com"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="phone"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Phone Number
-                </label>
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  placeholder="+91"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="inquiry"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Inquiry Type *
-                </label>
-                <select id="inquiry" name="inquiry" required className={inputClass}>
-                  {INQUIRY_TYPES.map((type) => (
-                    <option key={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="message"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Message *
-                </label>
-                <textarea
-                  id="message"
-                  name="message"
-                  required
-                  placeholder="Tell us briefly about your requirement…"
-                  className={`${inputClass} min-h-[160px] resize-y py-3.5`}
-                />
-              </div>
-            </div>
-
-            {status === "error" && (
-              <p className="mt-5 flex items-center gap-2 text-sm font-medium text-accent-red">
-                <AlertCircle size={16} />
-                Something went wrong. Please try again or email us directly at{" "}
-                <a href={CONTACT.emailHref} className="underline">
-                  {CONTACT.inquiryEmail}
-                </a>
-                .
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={status === "submitting"}
-              className="btn-primary mt-7 w-full disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
-            >
-              {status === "submitting" ? (
-                <>
-                  Sending… <Loader2 size={16} className="animate-spin" />
-                </>
-              ) : (
-                <>
-                  Submit Inquiry <Send size={16} />
-                </>
-              )}
-            </button>
-          </motion.form>
-        )}
-      </AnimatePresence>
+    <div id="consultation-form">
+      <div id="auditsetu-inquiry-form" ref={hostRef} />
+      <Script
+        src="https://app.auditsetu.com/widget.js"
+        data-organization="gaunas-management-consultants"
+      />
     </div>
   );
 }
