@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f7f3ea;
+  --color-surface: #fffbf4;
+  --color-surface-alt: #f1e9db;
+  --color-ink: #1f2430;
+  --color-muted: #5e6573;
+  --color-gold: #d9a11a;
+  --color-gold-deep: #b98512;
+  --color-blue: #2c5daa;
+  --color-blue-deep: #1f447e;
+  --color-line: #d8ccb8;
+  --color-dark: #161a22;
+  --color-accent-red: #c92a2a;
+
+  --font-display: var(--font-cormorant), Georgia, serif;
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* clip (not hidden) prevents page-level horizontal scroll from decorative
+     off-canvas elements without breaking position: sticky descendants */
+  overflow-x: clip;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overflow-x: clip;
+}
+
+/* Honour reduced-motion preferences for animations and smooth scroll */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-marquee {
+    animation: none;
+  }
+}
+
+::selection {
+  background: rgba(217, 161, 26, 0.25);
+}
+
+/* Anchor offset so headings don't hide under the sticky header / sticky nav */
+[id] {
+  scroll-margin-top: 160px;
+}
+
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee-scroll 32s linear infinite;
+}
+
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 12%,
+    #000 88%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 12%,
+    #000 88%,
+    transparent
+  );
+}
+
+.legal-prose h2 {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.legal-prose h2:first-child {
+  margin-top: 0;
+}
+
+.legal-prose p {
+  color: var(--color-muted);
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+
+.legal-prose ul {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.legal-prose li {
+  position: relative;
+  color: var(--color-muted);
+  line-height: 1.7;
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.legal-prose li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  height: 6px;
+  width: 6px;
+  border-radius: 9999px;
+  background: var(--color-gold);
+}
+
+.legal-prose a {
+  color: var(--color-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@layer components {
+  .container-site {
+    @apply mx-auto w-full max-w-[1280px] px-4 sm:px-5 lg:px-8;
+  }
+
+  .eyebrow {
+    @apply text-sm font-bold uppercase tracking-[0.12em] text-gold-deep;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-gold px-7 py-3.5 text-[15px] font-semibold text-ink transition-all duration-200 hover:bg-gold-deep hover:text-surface hover:shadow-lg hover:shadow-gold/25;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-line bg-surface/60 px-7 py-3.5 text-[15px] font-semibold text-ink transition-all duration-200 hover:border-gold hover:text-blue;
+  }
+
+  .btn-secondary-dark {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-[15px] font-semibold text-white transition-all duration-200 hover:border-gold hover:text-gold;
+  }
+
+  .gold-divider {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-gold/50 to-transparent;
+  }
+}
